@@ -19,6 +19,5 @@
 #define SNAP_CONFINE_USER_SUPPORT_H
 
 void setup_user_data();
-void mkpath(const char *const path);
 
 #endif
