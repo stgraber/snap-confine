@@ -38,9 +38,38 @@
 #include "user-support.h"
 #include "quirks.h"
 
+bool sc_in_container() {
+	FILE *fd = NULL;
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read = 0;
+
+	fd = fopen("/proc/1/environ", "r");
+	if (fd == NULL) {
+		return false;
+	}
+
+	while ((read = getdelim(&line, &len, '\0', fd)) > 0) {
+		if (read < 10) {
+			continue;
+		}
+
+		if (strncmp(line, "container=", 10) == 0) {
+			fclose(fd);
+			return true;
+		}
+	}
+
+	fclose(fd);
+	free(line);
+
+	return false;
+}
+
 int sc_main(int argc, char **argv)
 {
 	char *basename = strrchr(argv[0], '/');
+	bool in_container = sc_in_container();
 	if (basename) {
 		debug("setting argv[0] to %s", basename + 1);
 		argv[0] = basename + 1;
@@ -108,7 +137,11 @@ int sc_main(int argc, char **argv)
 	// set apparmor rules
 	rc = aa_change_onexec(security_tag);
 	if (rc != 0) {
-		if (secure_getenv("SNAPPY_LAUNCHER_INSIDE_TESTS") == NULL)
+		if (in_container)
+			debug("ignoring failure to load apparmor profile (in a container)");
+		else if (secure_getenv("SNAPPY_LAUNCHER_INSIDE_TESTS") != NULL)
+			debug("ignoring failure to load apparmor profile (testsuite)");
+		else
 			die("aa_change_onexec failed with %i", rc);
 	}
 #endif				// ifdef HAVE_APPARMOR
